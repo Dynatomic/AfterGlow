@@ -1,0 +1,13 @@
+Kotlin standard library 2.2.21
+JetBrains s.r.o. and Kotlin Programming Language contributors.
+Licensed under the Apache License, Version 2.0; see APACHE-2.0.txt.
+https://github.com/JetBrains/kotlin
+
+Gradle wrapper 8.13 (source build tooling, not an app runtime service)
+Copyright Gradle, Inc. and contributors.
+Licensed under the Apache License, Version 2.0; see APACHE-2.0.txt.
+https://gradle.org/
+
+DayBetter QC wire-protocol facts were consulted from independently published
+documentation. No upstream executable code or assets are bundled.
+https://github.com/DoudGeorges/daybetter-leds/blob/main/PROTOCOL.md

@@ -1,0 +1,44 @@
+// Focused effects checks. No radio or browser audio APIs are accessed.
+const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
+const base=process.argv[2]||path.join(__dirname,'..');
+const files=[path.join(base,'index.html'),path.join(base,'dist','index.html')];
+const sources=files.map(file=>fs.readFileSync(file,'utf8'));
+const scripts=sources.map(source=>source.match(/<script>([\s\S]*?)<\/script>/)[1]);
+for(const [start,end]of [['const EFFECT_MODES=','const events='],['function qcLightingFrames(','function setColor('],["$('effectSelect').onchange=","$('protocolMode').onchange="]])assert.equal(scripts[0].slice(scripts[0].indexOf(start),scripts[0].indexOf(end)),scripts[1].slice(scripts[1].indexOf(start),scripts[1].indexOf(end)),'local/hosted effect parity');
+function fixture(source,code){
+ const ids=new Set([...source.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]));
+ for(const [,id]of code.matchAll(/\$\('([^']+)'\)/g))assert(ids.has(id),'Missing DOM binding '+id);
+ assert(!/getUserMedia|getDisplayMedia|AudioContext|MediaRecorder/.test(code));new vm.Script(code);
+ const els=new Map(),scenes=[];
+ function element(){return {value:'',textContent:'',innerHTML:'',style:{setProperty(){}},dataset:{},attrs:{},setAttribute(k,v){this.attrs[k]=v},classList:{add(){},remove(){},contains(){return true},toggle(){}},getBoundingClientRect(){return {left:0,top:0,width:200,height:200}},setPointerCapture(){},releasePointerCapture(){},scrollIntoView(){},append(){},click(){},options:[],files:[]};}
+ function el(id){if(!els.has(id))els.set(id,element());return els.get(id)}
+ for(const match of source.matchAll(/<button class="scene"([^>]+)>/g)){const item=element();for(const [,key,value]of match[1].matchAll(/data-(\w+)="([^"]+)"/g))item.dataset[key]=value;scenes.push(item);}
+ const context=vm.createContext({assert,console,testScenes:scenes,document:{getElementById:el,documentElement:{style:{setProperty(){}}},querySelectorAll(selector){return selector==='.scene'?scenes:[]},createElement:element,addEventListener(){}},window:{isSecureContext:true},navigator:{},localStorage:{getItem(){return null},setItem(){}},setTimeout,clearTimeout,queueMicrotask,AbortController,Uint8Array,DataView,Date,URL,Blob,BroadcastChannel:class {postMessage(value){this.last=value}}});
+ vm.runInContext(code,context);return context;
+}
+const checks=String.raw`(async()=>{
+function payloads(frames){return Array.from(frames,frame=>{assert.equal(frame[0],0xa0);assert.equal(frame.length,frame[2]+2);const crc=crc16(frame.slice(0,-2));assert.equal(frame.at(-2),crc&255);assert.equal(frame.at(-1),crc>>>8);assert(frame.length<=20);return [frame[1],Array.from(frame.slice(3,-2))];});}
+function shape(value){return JSON.stringify(value)}
+const sample={color:'#123456',brightness:23,on:true,speed:52,effect:'solid'};
+assert.equal(shape(payloads(qcLightingFrames('effect',sample))),shape([[33,[0]],[26,[0]],[17,[1]],[18,[1,0]],[19,[23]],[21,[18,52,86,0]]]));
+for(const [name,id]of [['fade3',11],['fade7',12],['jump3',9],['jump7',10],['strobe7',23]]){
+ const state={...sample,effect:name};assert.equal(shape(payloads(qcLightingFrames('effect',state))),shape([[33,[0]],[26,[0]],[17,[1]],[18,[id,255]],[19,[23]],[22,[52]]]));
+ assert.equal(shape(payloads(qcLightingFrames('brightness',state))),shape(payloads(qcLightingFrames('effect',state))));assert.equal(shape(payloads(qcLightingFrames('speed',state))),shape([[22,[52]]]));
+}
+for(let sub=0;sub<4;sub++){const state={...sample,effect:'music'+sub};assert.equal(shape(payloads(qcLightingFrames('effect',state))),shape([[17,[1]],[18,[160,sub]],[19,[23]],[26,[1]],[33,[1]]]));assert.equal(shape(payloads(qcLightingFrames('brightness',state))),shape(payloads(qcLightingFrames('effect',state))));}
+assert.equal(shape(payloads(qcLightingFrames('off',{...sample,effect:'music3'}))),shape([[33,[0]],[26,[0]],[17,[0]]]));assert.equal(shape(payloads(qcLightingFrames('brightness',{...sample,effect:'music3',brightness:0}))),shape([[33,[0]],[26,[0]],[17,[0]]]));
+for(const speed of [0,101,NaN])assert.throws(()=>qcLightingFrames('effect',{...sample,speed}));assert.throws(()=>qcLightingFrames('effect',{...sample,effect:'unknown'}));
+console.log('PASS group 1: all animation/music IDs, framing/CRC, mode-preserving brightness, speed and mic-off transitions');
+function setup(authenticated=true){appStopped=false;mode='hardware';dropConnection('Effects mock setup');protocol='daybetter';profile=emptyProfile();const c={token:++session,protocol:'daybetter',authenticated,calls:[],active:0,maxActive:0};server={connected:true};c.write={properties:{write:true},async writeValueWithResponse(data){c.active++;c.maxActive=Math.max(c.maxActive,c.active);c.calls.push(Array.from(data));await new Promise(resolve=>setTimeout(resolve,1));c.active--;}};c.device={id:'effects-test',gatt:{connected:true,disconnect(){this.connected=false}},removeEventListener(){}};device=c.device;live=c;characteristic=c.write;return c;}
+dropConnection('Disconnected effect edit');selectedEffect='fade7';desired={...sample,brightness:50};$('effectSelect').onchange({target:{value:'music0'}});assert.equal(queue.length,0);assert.equal(live,null);
+let c=setup(false);$('effectSelect').onchange({target:{value:'strobe7'}});assert.equal(queue.length,0);assert.equal(c.calls.length,0);c.authenticated=true;render();assert.equal(c.calls.length,0);
+selectedEffect='fade7';$('brightness').oninput({target:{value:61}});$('brightness').onchange();await new Promise(resolve=>setTimeout(resolve,250));assert.equal(selectedEffect,'fade7');assert.equal(shape(payloads(c.calls)[3]),shape([18,[12,255]]));assert.equal(shape(payloads(c.calls)[4]),shape([19,[61]]));
+c=setup();let release;const normalWrite=c.write.writeValueWithResponse;c.write.writeValueWithResponse=async data=>{if(!c.calls.length){c.active++;c.maxActive=Math.max(c.maxActive,c.active);c.calls.push(Array.from(data));await new Promise(resolve=>release=resolve);c.active--;}else await normalWrite(data);};
+$('effectSelect').onchange({target:{value:'music2'}});$('effectSelect').onchange({target:{value:'fade3'}});$('effectSelect').onchange({target:{value:'solid'}});$('brightness').oninput({target:{value:72}});$('brightness').onchange();assert.equal(c.calls.length,1);assert.equal(queue.length,1);release();await new Promise(resolve=>setTimeout(resolve,500));assert.equal(c.calls.length,11);assert.equal(c.maxActive,1);const written=payloads(c.calls);assert.equal(shape(written[1]),shape([18,[160,2]]));assert.equal(shape(written[3]),shape([26,[1]]));assert.equal(shape(written[6]),shape([26,[0]]));assert.equal(shape(written[8]),shape([18,[1,0]]));assert.equal(shape(written[9]),shape([19,[72]]));
+c=setup();let quitRelease;c.write.writeValueWithResponse=data=>{c.calls.push(Array.from(data));return new Promise(resolve=>quitRelease=resolve)};$('effectSelect').onchange({target:{value:'music1'}});$('effectSelect').onchange({target:{value:'strobe7'}});assert.equal(queue.length,1);globalThis.fetch=async location=>({ok:true,json:async()=>location==='/api/status'?{app:'afterglow-local-controller-v1',api:1,token:'test'}:{app:'afterglow-local-controller-v1',stopping:true}});await $('quitApp').onclick();quitRelease();await new Promise(resolve=>setTimeout(resolve,20));assert.equal(c.calls.length,1);assert.equal(queue.length,0);assert.equal(live,null);assert.equal(appStopped,true);
+console.log('PASS group 2: auth/disconnected guards, no render replay, atomic coalescing, latest mode and Quit cancellation');
+c=setup();selectedEffect='music3';setColor('#abcdef');assert.equal(selectedEffect,'solid');selectedEffect='music2';testScenes[1].onclick();assert.equal(selectedEffect,'solid');await new Promise(resolve=>setTimeout(resolve,250));assert.equal(shape(payloads(c.calls)[1]),shape([26,[0]]));assert.equal(shape(payloads(c.calls)[3]),shape([18,[1,0]]));
+c=setup();protocol='custom';c.protocol='custom';c.authenticated=false;profile=validateProfile({service:'fff0',characteristic:'fff1',color:'AA {r} {g} {b}',music:'B1 02'});selectedEffect='music3';desired={color:'#ff8040',brightness:50,on:true,name:'Custom'};render();assert.equal($('effectControls').hidden,true);assert.equal($('music').hidden,false);send('music');await new Promise(resolve=>setTimeout(resolve,15));assert.equal(c.calls[0].join(','),'177,2');$('brightness').onchange();await new Promise(resolve=>setTimeout(resolve,65));assert.equal(c.calls[1].join(','),'170,128,64,32');dropConnection('Effects checks complete');
+console.log('PASS group 3: color/scene Solid transition, custom raw music/RGB preserved, DOM bindings and local/hosted parity');
+})()`;
+(async()=>{for(let i=0;i<files.length;i++){console.log(path.relative(base,files[i]));await vm.runInContext(checks,fixture(sources[i],scripts[i]));}})().catch(error=>{console.error(error);process.exitCode=1});

@@ -1,0 +1,20 @@
+# Python runtime / development environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+# Local diagnostics, transient files and private configuration
+*.log
+*.tmp
+*.pid
+*.token
+.env
+.env.*
+secrets.*
+afterglow-profile*.json
+# OS/editor metadata
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# dist/index.html is buildless browser source and is intentionally tracked.

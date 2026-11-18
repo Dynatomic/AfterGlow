@@ -1,0 +1,58 @@
+AFTERGLOW INTERNAL BOUNDARIES
+
+Packaging
+Windows index.html and dist/index.html intentionally contain their logical
+modules inline. No bundler, runtime dependency or extra served asset is needed.
+The root file retains verified local-server Quit; dist remains browser-only.
+controller.py and its asset whitelist are independent of lighting protocols.
+
+Owners
+DeviceCatalog owns the five exact service/write/notify signatures and separates
+software capabilities, protocol documentation and limited hardware evidence.
+Discovery owns user-initiated browser selection and previously granted lookup.
+TransportRegistry registers Bluetooth LE only. Wi-Fi has no provider or driver.
+Adding Wi-Fi would require new discovery, transport and driver implementations
+and a typed network-signature extension; catalog data alone cannot enable it.
+Browser HTTP transports would also need to satisfy CORS and browser network
+permissions. Raw TCP/UDP may require an explicit local helper rather than a
+direct browser transport. None of these network paths is implemented.
+BluetoothTransport owns raw GATT operations, not QC framing or interpretation.
+ConnectionSession owns session validity, deadlines, paced serialized actions,
+bounded queues and cancellation. UI callbacks keep their function facades.
+QcDriver owns frames, notification decoding, CCHIP authentication and commands.
+CustomProfileDriver owns validated user-provided raw packet mappings. A mapped
+custom command does not prove that a microphone or any other feature exists.
+DriverRegistry dispatches supported protocols; CapabilityAdapter gates actions.
+DeviceStorage validates remembered identity/profile/descriptor data. No desired
+color, brightness, queued actions or effect state is saved or replayed.
+
+Android has corresponding Kotlin boundaries: DeviceCatalog, LightDriver and
+DaybetterQcDriver, AndroidBleDiscovery, BluetoothGattTransport/GattSessionLink,
+LightSession, SavedDevices/SavedDeviceCodec and LightMemory. MainActivity owns
+the unchanged view hierarchy. Platform-specific permission and reconnection
+policies remain in their existing native/browser orchestration layers.
+
+Catalog contract
+Stable driver ID: daybetter-qc. Transport ID: bluetooth-le.
+Profiles (service / write / notify short UUIDs):
+P001 ff10 / ff12 / ff11; P01B e01b / a01b / f01b;
+P026 e026 / a026 / f026; P02C e02c / a02c / f02c;
+P031 e031 / a031 / f031.
+All use the Bluetooth base 0000XXXX-0000-1000-8000-00805f9b34fb.
+Capabilities describe implemented power, RGB, brightness, presets, speed,
+controller microphone commands and foreground RGB streaming. They do not
+certify a device, every firmware version or every effect. P001 reference
+evidence covers its exact signature, authentication and one steady blue test;
+other signatures are documented rather than hardware verified. Names alone
+never establish a model, protocol or brand. Update both catalog owners and
+their contract tests together when adding a separately verified driver.
+
+Storage migration
+Browser v1 records remain readable; an optional validated descriptor references
+the transport, driver and catalog model. Legacy records have no inferred model.
+Custom records retain their validated profile snapshot and separate driver ID.
+Native schema v2 reads v1, preserving local identity, aliases and saved pointer;
+legacy entries have no descriptor. A QC descriptor is assigned only after exact
+channel matching and successful authentication, never from a device name.
+No runtime network service, Wi-Fi implementation or new Android permission was
+introduced by this refactor.
