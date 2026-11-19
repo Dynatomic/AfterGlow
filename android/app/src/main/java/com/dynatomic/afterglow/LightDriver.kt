@@ -8,7 +8,8 @@ data class AuthenticationRequest(val command: Int, val bytes: ByteArray, val pha
 interface LightDriver {
     val id: String
     val capabilities: DeviceCapabilities
-    fun beginAuthentication(): AuthenticationRequest
+    val requiresAuthentication: Boolean get() = true
+    fun beginAuthentication(): AuthenticationRequest?
     fun response(bytes: ByteArray): DriverResponse
     /** null means authenticated; malformed or rejected exchanges throw IllegalArgumentException. */
     fun advanceAuthentication(request: AuthenticationRequest, response: DriverResponse): AuthenticationRequest?
@@ -16,5 +17,10 @@ interface LightDriver {
 }
 
 object DriverRegistry {
-    fun resolve(id: String): LightDriver? = if (id == DaybetterQcDriver.ID) DaybetterQcDriver else null
+    fun resolve(id: String): LightDriver? = when(id) {
+        DaybetterQcDriver.ID -> DaybetterQcDriver
+        ElkBledobDriver.ID -> ElkBledobDriver
+        ElkBledomDriver.ID -> ElkBledomDriver
+        else -> null
+    }
 }

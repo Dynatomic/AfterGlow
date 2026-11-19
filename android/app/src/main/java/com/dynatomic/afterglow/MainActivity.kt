@@ -143,7 +143,11 @@ class MainActivity : Activity(), LightController.Listener {
         }
         scroll.addView(body, ViewGroup.LayoutParams(-1, -2))
         val header = row().apply { gravity = Gravity.CENTER_VERTICAL }
-        header.addView(label("Afterglow", 25f).apply { typeface = Typeface.create("sans-serif-medium", 0) },LinearLayout.LayoutParams(0,-2,1f))
+        val brand = row().apply { gravity = Gravity.CENTER_VERTICAL }
+        brand.addView(label("Afterglow", 25f).apply { typeface = Typeface.create("sans-serif-medium", 0) })
+        val version=packageManager.getPackageInfo(packageName,0).versionName ?: ""
+        brand.addView(label("v$version", 11f, muted),LinearLayout.LayoutParams(-2,-2).apply { leftMargin=dp(8) })
+        header.addView(brand,LinearLayout.LayoutParams(0,-2,1f))
         power = ImageButton(this).apply {
             setImageResource(R.drawable.ic_power)
             setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -286,13 +290,16 @@ class MainActivity : Activity(), LightController.Listener {
             contentDescription = "Effect"
             background = rounded(panel)
             adapter = object : ArrayAdapter<String>(this@MainActivity, android.R.layout.simple_spinner_item, Effect.values().map { it.label }) {
+                override fun isEnabled(position: Int): Boolean = effectAvailable(Effect.values()[position])
+                override fun areAllItemsEnabled() = false
                 override fun getView(position: Int, recycled: View?, parent: ViewGroup): View =
                     (super.getView(position, recycled, parent) as TextView).apply {
                         setTextColor(ink); textSize = 14f; setPadding(dp(13), dp(10), dp(28), dp(10))
                     }
                 override fun getDropDownView(position: Int, recycled: View?, parent: ViewGroup): View =
                     (super.getDropDownView(position, recycled, parent) as TextView).apply {
-                        setBackgroundColor(panel); setTextColor(ink); textSize = 14f; minHeight = dp(48)
+                        setBackgroundColor(panel); setTextColor(if(isEnabled(position))ink else muted); alpha=if(isEnabled(position))1f else 0.45f
+                        isEnabled=isEnabled(position); textSize = 14f; minHeight = dp(48)
                         setPadding(dp(16), dp(12), dp(16), dp(12))
                     }
             }
@@ -301,6 +308,7 @@ class MainActivity : Activity(), LightController.Listener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     val effect = Effect.values()[position]
                     if (binding || effect == desired.effect) return
+                    if(!effectAvailable(effect)){render();return}
                     clearError()
                     desired = desired.copy(effect = effect)
                     applyAppearance()
@@ -384,6 +392,8 @@ class MainActivity : Activity(), LightController.Listener {
         cyclePaused = paused && (wasRunning || (desired.on && desired.effect == Effect.FULL_WHEEL))
     }
 
+    private fun effectAvailable(effect:Effect):Boolean = controller.currentCapabilities()?.supports(desired.copy(on=true,brightness=maxOf(1,desired.brightness),effect=effect),Change.APPEARANCE) ?: true
+
     private fun render() {
         if (!::power.isInitialized) return
         binding = true
@@ -409,11 +419,12 @@ class MainActivity : Activity(), LightController.Listener {
         connectionName.contentDescription=connectionName.text.toString()+". "+connectionStatus.text
         brightness.progress = desired.brightness
         brightnessValue.text = "${desired.brightness}%"
+        (effects.adapter as? BaseAdapter)?.notifyDataSetChanged()
         effects.setSelection(desired.effect.ordinal)
         speed.progress = desired.speed
         speedValue.text = desired.speed.toString()
         speedBox.visibility = if (desired.effect != Effect.SOLID && !desired.effect.isMusic) View.VISIBLE else View.GONE
-        musicCaption.visibility = if (desired.effect.isMusic) View.VISIBLE else View.GONE
+        musicCaption.visibility = if (desired.effect.isMusic && controller.currentCapabilities()?.controllerMicrophone != false) View.VISIBLE else View.GONE
         resume.visibility = if (cyclePaused && desired.on && desired.effect == Effect.FULL_WHEEL) View.VISIBLE else View.GONE
         preview.update(displayedColor, desired.brightness, desired.on)
         wheel.setColor(displayedColor)
@@ -624,7 +635,7 @@ class MainActivity : Activity(), LightController.Listener {
                 val records = controller.savedDevices()
                 if (records.isEmpty()) addView(label("No saved devices yet.", 13f, muted))
                 records.forEach { saved ->
-                    val detail=if(controller.isConnectedDevice(saved.id))"Connected" else if(saved.authenticated)"" else "Not authenticated yet"
+                    val detail=if(controller.isConnectedDevice(saved.id))"Connected" else if(saved.authenticated)"Saved · reconnect to verify" else DeviceCatalog.discoveryLabel(saved.advertisedName)
                     val card = deviceCard(saved.alias,detail)
                     val actions = row()
                     actions.addView(button("Connect").apply {
@@ -657,9 +668,8 @@ class MainActivity : Activity(), LightController.Listener {
                     val saved = savedRecord != null
                     val detail = when {
                         controller.isConnectedDevice(device.id) -> "Connected"
-                        savedRecord?.authenticated == true -> ""
-                        savedRecord != null -> "Not authenticated yet"
-                        else -> "Not verified"
+                        savedRecord?.authenticated == true -> "Saved · reconnect to verify"
+                        else -> DeviceCatalog.discoveryLabel(device.name)
                     }
                     val card = deviceCard(name, detail)
                     val actions = row()
@@ -802,6 +812,8 @@ class MainActivity : Activity(), LightController.Listener {
         this.status = text
         this.ready = ready
         this.busy = busy
+        if(ready && desired.effect.isMusic && controller.currentCapabilities()?.controllerMicrophone==false)
+            desired=desired.copy(effect=Effect.SOLID)
         if (lostReadyLink) stopCycle(true) else if (!ready) hardwareCycle = false
         refreshChooser()
         render()

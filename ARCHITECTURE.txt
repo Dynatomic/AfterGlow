@@ -56,3 +56,83 @@ legacy entries have no descriptor. A QC descriptor is assigned only after exact
 channel matching and successful authentication, never from a device name.
 No runtime network service, Wi-Fi implementation or new Android permission was
 introduced by this refactor.
+
+Windows ELK models
+ElkModels registers only ELK-BLEDOB (elk-bledob) and ELK-BLEDOM (elk-bledom).
+Both require the trimmed exact advertised model plus FFF0 / FFF3. Known-model
+name matching tolerates padded names; it never authorizes unknown
+ELK-BLED variants. Explicit custom profiles keep independent service matching.
+ElkDriver and BledomDriver own separate encoders: power, brightness, speed and
+effect envelopes differ. Shared RGB framing does not establish interchangeability.
+BLEDOB requires write-without-response; BLEDOM accepts it or acknowledged writes.
+Neither subscribes, authenticates, reads state, sets timers or sends on connect.
+Capabilities implement power, color, brightness, five presets, speed and foreground
+RGB streaming; controller microphone commands remain unavailable on both models.
+Both retain exact saved driver/model identity and never replay lighting settings.
+Native Android 1.0.4 implements these models separately as described below.
+Firmware behavior still requires a live user check for each model.
+Protocol references (independent implementation):
+https://github.com/8none1/elk-bledob/blob/main/README.md
+https://github.com/smarthomesven/homey-duoco-strip/blob/main/drivers/led-strip/device.js
+https://github.com/Rxflex/LotusLantern/blob/main/docs/PROTOCOL.md
+https://github.com/TheSylex/ELK-BLEDOM-bluetooth-led-strip-controller/blob/main/src/device.rs
+
+Windows nearby-device selection
+Connect uses the broad browser Bluetooth chooser with
+registered service grants plus the current custom service. The browser controls
+which nearby BLE devices it can show and cannot display Afterglow support labels
+inside its popup. After selection, an in-app candidate line reports checking,
+supported, unsupported by the selected profile, not yet supported, or unverified.
+That candidate is separate from the active connection and saved-ready identity.
+Unknown normal-profile candidates undergo read-only known-QC channel validation;
+only an exact implemented service/write/notify channel permits subscription and
+CCHIP authentication. Unsupported candidates send no protocol/lighting commands
+and never replace a saved-ready device. Transport failures remain unverified,
+rather than falsely establishing absence of support.
+
+Windows automatic profile matching
+Fresh selections under any built-in profile resolve the driver independently of
+the previous dropdown: exact normalized known ELK model or exact implemented QC
+channel, with no wildcard ELK encoder. Only a ready session updates the selected
+profile and saved-ready identity. Custom verified profiles are explicit overrides.
+Previously granted reconnect can ignore a stale different built-in dropdown, but
+must preserve the saved opaque device ID and driver/model descriptor. A changed
+model or QC catalog channel is rejected before subscription/authentication; legacy
+records without a descriptor acquire one only after successful readiness.
+
+Windows local device book and controls
+A bounded version-1 device book stores up to 32 validated ready-record snapshots
+and 80-character local aliases keyed by opaque browser device ID. Existing last-ready
+records migrate without invented descriptors. Explicit Save is separate from automatic
+last-ready reconnection; aliases never participate in advertised-name/protocol matching.
+Saved selection uses exact granted identity or a user chooser whose returned ID must
+match before any GATT work. Forget removes matching identity/alias/last-ready state and
+invalidates active operations for that target; per-ID forget epochs reject stale chooser
+results without disconnecting another active device. Fresh later Connect remains allowed.
+The Advanced dialog uses native showModal/close, Close/Escape handling and focus/scroll
+restoration. Update results remain inside its final section. Local/hosted Quit closes it.
+
+Windows volatile Bluetooth handles
+Ready validated sessions populate a bounded page-memory Map from exact opaque
+Chrome ID to BluetoothDevice. Explicit saved selection prefers this handle, then
+getDevices, then the strict-ID user chooser fallback. Objects are never serialized;
+GATT driver/channel checks remain mandatory on reconnect. Cache insertion happens
+only after ready-session/forget checks. Forget evicts its ID, failed cached attempts
+evict their handle, and local/hosted Quit clears the Map. A reload retains only the
+validated JSON identity book and may still require Chrome's chooser.
+
+
+Android 1.0.4 ELK drivers
+ElkBledobDriver and ElkBledomDriver remain independent native encoders. DeviceCatalog
+requires each normalized exact raw model name and FFF0/FFF3; aliases never select a
+driver. Channel properties choose an allowed write mode: BLEDOB requires no-response,
+BLEDOM permits acknowledged or no-response writes. Saved driver/model mismatches are
+rejected. Unknown ELK-BLED variants cannot fall through to QC authentication.
+QC retains its five exact triplets, subscription and CCHIP exchange. ELK reaches
+Ready without subscription/authentication or connection-time lighting/clock writes.
+No-response completion is paced local acceptance, not proof of hardware receipt.
+Native discovery is unfiltered and shows provisional support hints. Unsupported QC
+Music resets to Solid in UI state when connecting ELK without replaying lighting.
+The existing native Device Option layout, saved/rename/forget/disconnect behavior,
+exact-device foreground range policy and no-replay/background boundaries remain.
+Android 1.0.4 is version code 13; phone/ELK hardware acceptance remains pending.

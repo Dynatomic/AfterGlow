@@ -35,10 +35,14 @@ class LightSession(private val clock:SessionClock,private val status:(String,Boo
 
     fun attach(next:SessionLink,driver:LightDriver=this.driver) {
         disconnect(false);this.driver=driver;link=next;val token=generation;notificationsObserved=0
+        if(!driver.requiresAuthentication){markReady();return}
         status("Authenticating · notifications",false)
         armAuthenticationTimeout(token,null)
         next.subscribe({bytes->if(owns(token))receive(bytes,token)},{ok->
-            if(owns(token)){timeout?.cancel();if(!ok)fail("Could not enable light notifications") else exchange(driver.beginAuthentication(),token)}
+            if(owns(token)){timeout?.cancel();if(!ok)fail("Could not enable light notifications") else {
+                val request=driver.beginAuthentication()
+                if(request==null)fail("Missing authentication exchange") else exchange(request,token)
+            }}
         })
     }
     private fun owns(token:Long)=token==generation&&link!=null
@@ -77,7 +81,11 @@ class LightSession(private val clock:SessionClock,private val status:(String,Boo
             fail(error.message ?: "Unsupported authentication challenge");return
         }
         if(next!=null)exchange(next,token)
-        else {auth=null;ready=true;lastIntent=null;status("Authenticated",true)}
+        else markReady()
+    }
+    private fun markReady(){
+        auth=null;ready=true;lastIntent=null
+        status(if(driver.requiresAuthentication)"Authenticated" else "Ready",true)
     }
     private fun writePaced(bytes:ByteArray,token:Long,valid:()->Boolean={true},complete:(Boolean)->Unit){
         check(!busy);busy=true

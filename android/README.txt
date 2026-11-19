@@ -1,166 +1,101 @@
-AFTERGLOW FOR ANDROID — DEVELOPMENT PREVIEW
+AFTERGLOW FOR ANDROID 1.0.4
 
-Native Android app, separate from the desktop/browser controller.
-Android 8.0 (API 26) or newer; Bluetooth Low Energy hardware required.
+Native Android controller; Android 8.0 (API 26) or newer with Bluetooth LE.
 Package: com.dynatomic.afterglow
-Version: 1.0.0-android-preview.11 (version code 11)
+Version: 1.0.4 (version code 13), shown beside Afterglow in the app.
+Delivery: artifacts\Afterglow-Android-v1.0.4.apk
+This is a locally debug-signed test build, not a Play Store/production release.
 
-INSTALL AND TRY
-The public v1.0.3 release asset is Afterglow-Android-v1.0.3.apk. Its internal
-Android version remains the development preview11 listed above.
-Transfer the provided debug APK to your Android phone and open it. Android may
-ask you to permit installation from that particular file/browser app. This is a
-locally debug-signed development build, not a Play Store or production release.
-No vendor app, Chrome, PC server, account or Internet connection is required.
-Install preview.11 over the existing app without uninstalling it. It uses the same
-development signing key. The original preview did not store a light identity;
-shortcuts saved by preview.2 or later persist across in-place updates.
+INSTALL / USE
+Transfer the APK to your phone and open it. Android may ask to allow installation
+from that file/browser app. Install over the existing Afterglow app to retain
+saved devices; this build uses the existing development signing certificate.
+The earlier preview11/v1.0.3 APK artifacts remain unchanged.
 
-Tap Device Option, scan nearby or select a saved light, then tap Connect. Allow
-Nearby devices when requested. The main connection panel is read-only and shows
-a device name only while the connection is authenticated. All connection actions
-are inside Device Option, including Disconnect and pending-connection Cancel.
-On Android 8–11 the OS requires location permission for BLE scanning; system
-location services may also need to be enabled. The app does not derive location.
-Names alone do not establish compatibility. A supported QC channel is checked
-and authenticated before lighting commands are allowed. Connecting does not
-change the light, and disconnected edits are never replayed on connection.
+Tap Device Option, allow Nearby devices, then Scan nearby or select a saved light
+and Connect. Disconnect and Cancel connection remain inside Device Option.
+The full-screen Saved/Nearby page retains its opaque layout and system safe areas.
+Opening/canceling it preserves the current connection. Choosing the connected
+light does not reconnect. There is no Advanced panel or profile-selection step.
+Android 8-11 requires location permission (and sometimes system location services)
+for BLE scanning; the app does not derive location. Native Android does not use
+an in-browser Bluetooth chooser or require Chrome, a PC server or a vendor app.
 
-Device Option beside the connection status opens an opaque full-screen Saved/
-Nearby devices page with a Back toolbar. System status/navigation bars stay
-visible; safe-area padding/clipping protects the page. Opening it
-does not scan or connect. Tap Scan nearby deliberately, then use separate Connect
-or Save actions. Save stores an unverified identity locally without changing the
-current connection or sending commands. Successful authentication also saves the
-device and records successful authentication privately; this does not certify every effect.
+Discovery lists nearby BLE identities without a service filter (up to 32 rows).
+Names only provide hints: known models need verification; other names are labeled
+Not yet supported, with explicit Connect available to check their GATT channel.
+An unknown name can still match an exact supported QC triplet. Unsupported ELK-
+BLED variants are refused without trying a guessed protocol or lighting command.
 
-Saved entries have local names. Their menu offers Rename (1-40 characters) and
-Forget. Rename changes only the local name, not the Bluetooth hardware. Forget
-the selected active/pending device also disconnects it and cancels reconnection;
-forgetting another saved device leaves the selected link alone.
-The list holds up to 32 devices, deduplicated by exact address. Later connections
-preserve your chosen names. There is no startup scan/automatic connection or
-lighting replay. Choosing an already connected device does not reconnect it.
+SUPPORTED SOFTWARE / EVIDENCE
+DayBetter QC keeps the five exact service/write/notify triplets:
+P001 FF10/FF12/FF11; P01B E01B/A01B/F01B; P026 E026/A026/F026;
+P02C E02C/A02C/F02C; P031 E031/A031/F031. Notification subscription and CCHIP
+authentication are required before QC lighting. Other names do not bypass this.
 
-Close, Back or dismissing the chooser stops discovery only and preserves the
-current light/settings. Selecting a different device explicitly switches links.
-Failed selections never erase saved entries or mark a device authenticated.
-Address, advertised name, local name and previous-authentication status are kept
-only in app-private phone storage and excluded from backup/device transfer.
-The previous single-light record migrates once; forgetting it will not cause it
-to reappear from the old settings. Corrupt/unsupported saved data is rejected.
+ELK-BLEDOB and ELK-BLEDOM have distinct catalog entries and independent encoders.
+The raw device name is trimmed/case-normalized and must equal an exact model;
+FFF0 service and FFF3 writer are also required. BLEDOB requires no-response writes;
+BLEDOM accepts acknowledged or no-response writes according to channel properties.
+Saved aliases and MAC prefixes never choose a driver. A saved driver/catalog
+mismatch is refused. ELK becomes Ready without QC auth, subscription, clock/timer
+sync or connection lighting writes. Local no-response write acceptance does not
+prove hardware receipt. ELK microphone modes are disabled; connecting after QC
+Music resets the UI selection to Solid without sending lighting.
 
-One explicit Connect attempt permits at most two GATT connections and 30 seconds
-total. Only an authentication/notification timeout can trigger the second link,
-using the same selected light without rescanning. Services, notifications and
-CCHIP authentication are established afresh. No lighting is changed by recovery.
-Cancel, Disconnect, another Connect attempt or leaving the foreground cancels it.
-There is no startup/background retry. Malformed/rejected authentication stops
-this manual authentication recovery. Exhausted timeout
-errors show the phase, write/response progress and notification count, without
-device addresses or challenge data. This is bounded recovery, not a claim that
-the intermittent device/Android cause has been established.
+Power, RGB, brightness, Scenes, Fade/Jump/Strobe and foreground Full color wheel
+are implemented for both ELK models. Zero brightness sends Off; positive brightness
+restores power without resetting the effect. QC Music uses the controller's mic,
+never the phone microphone; leaving Music disables QC rhythm/mic as before.
 
-FOREGROUND RANGE RECONNECTION
-After a selected light authenticates, unexpected link loss while this app is
-visible can open one native Android autoConnect waiting link to that exact light.
-An after-authentication transport/write failure can enter the same waiting state;
-the failed command and its queued remainder are discarded, never replayed.
-No periodic scan, saved-device guessing, worker, Internet or background service
-is used. Device Option offers Cancel connection while waiting for range.
+The user accepted the prior preview11 native interface and verified connection
+and control of their known QC light. Earlier P001 desktop evidence covered the
+exact signature, authentication and one steady-blue result. Other QC signatures,
+individual effects and this update's ELK behavior remain hardware-unverified.
+This APK was not run on an emulator or physical phone during its local build.
+JVM/build checks do not establish phone, controller or visual acceptance.
 
-When Android reports that the device has returned, fresh services, notifications
-and CCHIP authentication are required. Establishment is bounded to 30 seconds,
-with one automatic authentication attempt; a failure stops automatic intent.
-Success never resumes colors, effects or the app-driven wheel automatically.
-Use the light controls deliberately afterward. Actual Android/device range
-reconnection reliability remains unverified until phone testing.
+SAVED DEVICES / FOREGROUND POLICY
+Save stores an unverified identity without connecting or sending commands. Ready
+connections also save their validated descriptor. Up to 32 devices and 40-character
+aliases are stored privately, excluded from backup. Rename is local. Forget of
+the selected/pending/waiting device cancels and disconnects it; stale callbacks
+cannot save it again. Forget of an inactive device preserves the active link.
+Storage schema v2 migrates v1 identities/aliases. Lighting state is never saved.
 
-Disconnect, Forget the selected device, choosing a new device or closing the app
-cancels the waiting intent. Leaving the foreground cancels waiting/automatic
-establishment and closes an autoConnect-created link so it cannot reconnect in
-the background. Returning to the app never reconnects an already-disconnected
-light by itself. An existing authenticated direct link can re-arm future loss
-handling when the app becomes visible again.
+Manual QC authentication recovery is bounded to two fresh links within 30 seconds.
+After a Ready link is unexpectedly lost while visible, one native autoConnect
+waiting link targets that exact address. Returning devices require fresh GATT
+validation and driver setup (QC authenticates; ELK becomes Ready). Establishment
+is bounded; failure stops automatic intent. No colors, settings, queued commands
+or animations replay on connection/reconnection. Cancel, Disconnect, Forget,
+another device selection or leaving the foreground cancels range waiting.
 
-Color, brightness, eight Scenes, Fade/Jump/Strobe presets and four controller-mic
-Music modes are available. Music uses the light controller's microphone, not the
-phone microphone. Leaving Music explicitly disables rhythm and controller mic
-before the destination. Brightness preserves the selected mode. Turning on at
-zero brightness restores a positive requested brightness.
-
-Full color wheel streams paced RGB commands only after explicit selection while
-authenticated. An unconnected sample stays a sample after connection; use Resume
-to request hardware animation. Leaving the app pauses its wheel scheduler and
-cancels remaining lighting work. It never silently resumes on returning. No
-background service is used. Controller-native presets/music may continue after
-disconnect while browser/app-driven RGB stops at the last submitted color.
-
-The monitor glow and wheel marker are illustrative requested values, not measured
-device state. The app contains no Advanced panel, custom packet editing, automatic
-updates, Internet permission, microphone permission, telemetry or remote API.
-
-COMPATIBILITY / VERIFICATION
-P001 FF10 / FF12 / FF11 was previously verified with CCHIP authentication and a
-steady-blue test using a separate desktop hardware client and user observation.
-P01B/P026/P02C/P031 signatures are included but remain hardware-unverified.
-The initial Android preview connected and worked in a user phone test. This
-preview.3 added bounded authentication recovery after intermittent phone timeouts.
-Preview.10 groups the current connection status and Disconnect/Cancel action in
-a distinct panel at the top of Device Option. It retains preview.9, which moved
-every connection action into Device Option, made the main device
-panel read-only, disconnected on Forget of the selected device, and added the
-foreground-only exact-device range policy described above. The opaque page and
-safe-area layout are retained. These changes and reconnection reliability need
-phone acceptance. This does not
-establish every effect or device as verified.
-JVM tests do not establish hardware success.
-
-ARCHITECTURE
-See ../ARCHITECTURE.txt for the shared catalog and boundary contract.
-Preview.11 separates the exact-channel DeviceCatalog, LightDriver/DaybetterQcDriver,
-AndroidBleDiscovery, BluetoothGattTransport/GattSessionLink, LightSession and
-SavedDevices/SavedDeviceCodec storage boundaries. MainActivity's view hierarchy is
-unchanged. Only Bluetooth LE is registered; Wi-Fi has no implementation.
-Native storage schema v2 reads and migrates v1 while preserving saved identities,
-local aliases, authentication flags and the last authenticated pointer. Old records
-retain an unknown model. A descriptor is assigned only after an exact supported
-channel match and successful authentication. Unsupported descriptor metadata becomes
-unknown while its saved identity is preserved. No lighting state is persisted.
+Full color wheel streams paced RGB only after explicit user selection/Resume.
+Leaving the app pauses the stream and cancels queued lighting. Returning never
+resumes it automatically. Native controller presets may continue independently.
+The preview/marker show requested values, not measured controller state.
+No background service, Internet/phone-mic permission, account, telemetry, remote
+API, automatic updater or server is included. Android updates remain manual.
 
 BUILD / TEST
-Use a compatible JDK (17+), Android SDK platform 36 and Build Tools 35.0.0.
-Set JAVA_HOME and ANDROID_HOME for your shell, or use a local.properties sdk.dir.
-The Gradle 8.13 wrapper downloads checksum-verified Gradle; plugin dependencies
-come from Google/Maven Central. Android Gradle Plugin 8.13.2, Kotlin 2.2.21.
-
+Use JDK 17+, SDK platform 36, Build Tools 35.0.0, Gradle 8.13 (wrapper),
+Android Gradle Plugin 8.13.2 and Kotlin 2.2.21. Set JAVA_HOME and ANDROID_HOME.
+Set AFTERGLOW_DEBUG_KEYSTORE to the existing private debug keystore for updates;
+never replace that key when building an APK for an existing installation.
 Windows: gradlew.bat :app:testDebugUnitTest :app:assembleDebug
 APK: app\build\outputs\apk\debug\app-debug.apk
-Tests: app\build\reports\tests\testDebugUnitTest\index.html
+JVM report: app\build\reports\tests\testDebugUnitTest\index.html
+Tests cover QC vectors/authentication, exact catalog/name/property matching,
+separate ELK vectors, no connect replay, paced writes/stale callbacks, capability
+gates, cancellation, saved-device aliases/forgetting and foreground reconnection.
+Toolchains, keys, local.properties, caches and generated files stay out of source.
+See ../ARCHITECTURE.txt for the shared catalog/transport/driver/storage boundaries.
 
-The 139-case JVM suite covers packet vectors/CRC, strict authentication,
-failures/timeouts/stale callbacks, serialization/pacing, coalescing/cancellation,
-mode/music transitions, brightness and no connect/disconnected replay. It also
-covers bounded manual recovery, foreground exact-device reconnection, discovery,
-saved lists/forgetting, exact catalog matching, capability/evidence boundaries,
-driver dispatch and backward-compatible descriptor storage migration.
-
-Toolchains, caches, generated build files and debug keys must stay out of source
-publication. The normal debug key is outside this source folder. Optionally set
-AFTERGLOW_DEBUG_KEYSTORE to your existing private Android debug keystore path.
-Keep the signing key if you need future APKs to update the same installation.
-A production release needs a separately managed release key; none is created here.
-
-LIVE ACCEPTANCE
-The user confirmed this refactored preview11 connected and controlled the known
-light. This does not verify every effect, firmware, catalog profile or range-
-reconnection scenario. The v1.0.3 release retains the exact tested APK bytes.
-Android updates remain manual; the app has no Internet/update-check feature.
-
-LICENSE
-Afterglow source: PolyForm Noncommercial 1.0.0, exact text in LICENSE.
+LICENSE / PROTOCOL REFERENCES
+Afterglow: PolyForm Noncommercial 1.0.0, exact text in LICENSE.
 Required Notice: Copyright 2026 Dynatomic
-Commercial use outside those permissions needs separate approval from Dynatomic.
-Third-party runtime/wrapper notices and Apache 2.0 text are included separately.
-Protocol facts reference: github.com/DoudGeorges/daybetter-leds/PROTOCOL.md.
+Third-party notices and Apache 2.0 text are included separately.
+Protocol facts: github.com/DoudGeorges/daybetter-leds/PROTOCOL.md;
+github.com/8none1/elk-bledob; github.com/smarthomesven/homey-duoco-strip.
 No upstream executable protocol implementation is bundled.

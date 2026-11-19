@@ -41,7 +41,9 @@ data class DeviceEvidence(
     val hardware: HardwareEvidence,
     val hardwareNotes: String? = null
 )
-data class GattSignature(val service: String, val write: String, val notify: String)
+enum class GattWriteMode { ACKNOWLEDGED, WITHOUT_RESPONSE }
+data class GattSignature(val service: String, val write: String, val notify: String?,
+    val writeMode: GattWriteMode = GattWriteMode.ACKNOWLEDGED)
 data class DeviceDescriptorRef(val transport: TransportType, val driverId: String, val modelId: String)
 data class DeviceModelDescriptor(
     val id: String,
@@ -49,14 +51,18 @@ data class DeviceModelDescriptor(
     val transport: TransportType,
     val signature: GattSignature,
     val capabilities: DeviceCapabilities,
-    val evidence: DeviceEvidence
+    val evidence: DeviceEvidence,
+    val advertisedName: String? = null,
+    val acceptedWriteModes: Set<GattWriteMode> = setOf(signature.writeMode)
 ) {
     fun reference() = DeviceDescriptorRef(transport, driverId, id)
 }
 
-/** Exact service/channel catalog only. Advertised names never identify a driver or model. */
+/** Exact service/channel catalog. ELK additionally requires its exact advertised name.
+ * A name without a matching discovered channel never identifies a usable device. */
 object DeviceCatalog {
     val qcCapabilities = DeviceCapabilities(true, true, true, true, true, true, true)
+    val elkCapabilities = DeviceCapabilities(true, true, true, true, true, false, true)
     private val qcEvidence = DeviceEvidence(ImplementationEvidence.IMPLEMENTED,
         DocumentationEvidence.DOCUMENTED, HardwareEvidence.NOT_VERIFIED)
     private fun uuid(short: String) = "0000$short-0000-1000-8000-00805f9b34fb"
@@ -71,12 +77,36 @@ object DeviceCatalog {
         model("P01B", "e01b", "a01b", "f01b"),
         model("P026", "e026", "a026", "f026"),
         model("P02C", "e02c", "a02c", "f02c"),
-        model("P031", "e031", "a031", "f031")
+        model("P031", "e031", "a031", "f031"),
+        DeviceModelDescriptor("ELK-BLEDOB", ElkBledobDriver.ID, TransportType.BLE,
+            GattSignature(uuid("fff0"), uuid("fff3"), null, GattWriteMode.WITHOUT_RESPONSE),
+            elkCapabilities, qcEvidence.copy(hardwareNotes="Protocol documented upstream; this controller has not been hardware tested with Afterglow."),
+            advertisedName="ELK-BLEDOB"),
+        DeviceModelDescriptor("ELK-BLEDOM", ElkBledomDriver.ID, TransportType.BLE,
+            GattSignature(uuid("fff0"), uuid("fff3"), null),
+            elkCapabilities, qcEvidence.copy(hardwareNotes="Protocol documented upstream; this controller has not been hardware tested with Afterglow."),
+            advertisedName="ELK-BLEDOM", acceptedWriteModes=setOf(GattWriteMode.ACKNOWLEDGED, GattWriteMode.WITHOUT_RESPONSE))
     )
-    fun match(service: String, write: String, notify: String): DeviceModelDescriptor? {
-        val signature = try { GattSignature(canonical(service), canonical(write), canonical(notify)) }
+    // Only the raw advertisement is protocol identity. A saved alias never enters here.
+    fun matchesName(model: DeviceModelDescriptor, name: String): Boolean {
+        val raw=name.trim().uppercase(Locale.ROOT)
+        return model.advertisedName?.let { it == raw } ?: !raw.startsWith("ELK-BLED")
+    }
+    fun writeMode(model: DeviceModelDescriptor, acknowledged: Boolean, withoutResponse: Boolean): GattWriteMode? =
+        model.acceptedWriteModes.firstOrNull { if(it==GattWriteMode.ACKNOWLEDGED)acknowledged else withoutResponse }
+    /** Names offer a discovery hint only; connecting still validates every channel. */
+    fun discoveryLabel(name: String): String = when {
+        models.any { it.advertisedName!=null && matchesName(it,name) } -> "Known model · verification needed"
+        Regex("(?i)(daybetter|smart light|P001|P01B|P026|P02C|P031)").containsMatchIn(name.trim()) -> "Possible QC light · verification needed"
+        else -> "Not yet supported · connect to check"
+    }
+    fun acceptsSaved(model: DeviceModelDescriptor, expected: DeviceDescriptorRef?) = expected == null || model.reference() == expected
+    fun match(service: String, write: String, notify: String?, name: String = "",
+        writeMode: GattWriteMode = GattWriteMode.ACKNOWLEDGED): DeviceModelDescriptor? {
+        val signature = try { GattSignature(canonical(service), canonical(write), notify?.let(::canonical), writeMode) }
             catch (_: IllegalArgumentException) { return null }
-        return models.firstOrNull { it.signature == signature }
+        return models.firstOrNull { it.signature.copy(writeMode=writeMode) == signature &&
+            writeMode in it.acceptedWriteModes && matchesName(it, name) }
     }
     fun resolve(reference: DeviceDescriptorRef): DeviceModelDescriptor? = models.firstOrNull {
         it.id == reference.modelId && it.driverId == reference.driverId && it.transport == reference.transport &&

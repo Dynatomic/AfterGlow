@@ -15,8 +15,8 @@ class DeviceCatalogTest {
     )
 
     @Test fun catalogResolvesExactlyTheFiveDocumentedQcChannelSignatures() {
-        assertEquals(signatures.map { it.first }.toSet(), DeviceCatalog.models.map { it.id }.toSet())
-        assertEquals(5, DeviceCatalog.models.size)
+        assertEquals(signatures.map { it.first }.toSet(), DeviceCatalog.models.filter { it.driverId == DaybetterQcDriver.ID }.map { it.id }.toSet())
+        assertEquals(7, DeviceCatalog.models.size)
         signatures.forEach { (id, parts) ->
             val model = DeviceCatalog.match(uuid(parts[0]), uuid(parts[1]), uuid(parts[2]))!!
             assertEquals(id, model.id)
@@ -88,7 +88,7 @@ class DeviceCatalogTest {
 
     @Test fun capabilitiesGateEachControlAndDoNotInferMusicFromColorSupport() {
         val all = DeviceCapabilities(true, true, true, true, true, true, true)
-        DeviceCatalog.models.forEach { assertEquals(all, it.capabilities) }
+        DeviceCatalog.models.filter { it.driverId == DaybetterQcDriver.ID }.forEach { assertEquals(all, it.capabilities) }
         val none = DeviceCapabilities(false, false, false, false, false, false, false)
         val state = LightState()
         assertFalse(none.supports(state.copy(on = false), Change.OFF))

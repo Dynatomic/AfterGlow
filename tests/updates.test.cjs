@@ -6,11 +6,11 @@ const section=source=>source.slice(source.indexOf('function parseStableVersion('
 assert.equal(section(scripts[0]),section(scripts[1]));
 for(const source of sources){assert(source.includes('id="checkUpdates"'));assert(source.includes('target="_blank" rel="noopener noreferrer" hidden>Open release page'));}
 const tests=String.raw`(async()=>{
-assert.equal(APP_VERSION,'1.0.3');assert.equal($('appVersion').textContent,APP_VERSION);assert.equal(__updateProbe.length,0);assert(troubleshootingReport().includes('App version: '+APP_VERSION));
-for(const [a,b,want]of [['v1.0.3','1.0.2',1],['v1.0.2','1.0.1',1],['v1.0.1','1.0.0',1],['1.10.0','1.9.9',1],['v1.0.0+build.2','1.0.0',0],['0.9.9','1.0.0',-1],['999999999999999999999.0.0','999999999999999999998.999.999',1]])assert.equal(compareStableVersions(a,b),want);
+assert.equal(APP_VERSION,'1.0.4');assert.equal($('appVersion').textContent,APP_VERSION);assert.equal(__updateProbe.length,0);assert(troubleshootingReport().includes('App version: '+APP_VERSION));
+for(const [a,b,want]of [['v1.0.4','1.0.3',1],['v1.0.3','1.0.2',1],['v1.0.2','1.0.1',1],['v1.0.1','1.0.0',1],['1.10.0','1.9.9',1],['v1.0.0+build.2','1.0.0',0],['0.9.9','1.0.0',-1],['999999999999999999999.0.0','999999999999999999998.999.999',1]])assert.equal(compareStableVersions(a,b),want);
 for(const value of ['1.0.0'+String.fromCharCode(10),'1.0.0'+String.fromCharCode(13),'1.0.0'+String.fromCharCode(9),'',null,'1.0','01.0.0','1.0.0-rc.1','1.0.0;alert(1)','javascript:1.0.0','v1.0.0+','1.0.0\n'])assert.equal(parseStableVersion(value),null);
 const stable=(tag,extra={})=>({tag_name:tag,draft:false,prerelease:false,...extra});
-const response=(status=200,body=stable('v1.0.3'))=>({status,ok:status>=200&&status<300,async json(){return body}});
+const response=(status=200,body=stable('v1.0.4'))=>({status,ok:status>=200&&status<300,async json(){return body}});
 let requests=[];function useFetch(fn){globalThis.fetch=async(url,options)=>{requests.push({url,options});return fn(url,options)};}
 async function check(mock){requests=[];useFetch(mock);await $('checkUpdates').onclick();assert.equal(requests.length,1);assert.equal(requests[0].url,UPDATE_API);assert.equal(requests[0].options.method,'GET');assert.equal(requests[0].options.credentials,'omit');assert.equal(requests[0].options.cache,'no-store');assert.equal(requests[0].options.redirect,'error');assert(!Object.keys(requests[0].options.headers).some(key=>/authorization|token/i.test(key)));assert.equal(pendingUpdateCheck,null);assert.equal($('checkUpdates').disabled,false);}
 await check(()=>response(200,stable('v1.2.0',{html_url:'javascript:alert(1)',assets:[{browser_download_url:'https://untrusted.invalid/install.exe'}],body:'<script>throw Error()</script>'})));assert($('updateStatus').textContent.includes('1.2.0 is available'));assert.equal($('updateReleaseLink').href,'https://github.com/Dynatomic/AfterGlow/releases/tag/v1.2.0');assert.equal($('updateReleaseLink').hidden,false);

@@ -20,25 +20,26 @@ class BluetoothGattTransport(context: Context) : BleConnectionTransport {
         device.connectGatt(app, autoConnect, callbacks, BluetoothDevice.TRANSPORT_LE)
 }
 
-/** One acknowledged GATT channel. It knows neither QC framing nor application lighting state. */
+/** One GATT channel with an explicit write mode. It knows neither QC framing nor application lighting state. */
 @SuppressLint("MissingPermission")
 class GattSessionLink(
     private val connection: BluetoothGatt,
     private val writer: BluetoothGattCharacteristic,
-    private val notifier: BluetoothGattCharacteristic,
+    private val notifier: BluetoothGattCharacteristic?,
     private val clock: SessionClock,
+    private val writeMode: GattWriteMode = GattWriteMode.ACKNOWLEDGED,
     private val owns: () -> Boolean
 ) : SessionLink {
     private var receive: ((ByteArray) -> Unit)? = null
     private var subscription: ((Boolean) -> Unit)? = null
-    private var written: ((Boolean) -> Unit)? = null
-    private var writeTimeout: Cancellation? = null
+    private val receipt = WriteReceipt(clock) { !ended && owns() }
     private var ended = false
     private val cccd = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     override fun subscribe(receive: (ByteArray) -> Unit, complete: (Boolean) -> Unit) {
         this.receive = receive
         subscription = complete
         try {
+            val notifier = notifier ?: run { finishSubscribe(false); return }
             val descriptor = notifier.getDescriptor(cccd)
             if (ended || !owns() || descriptor == null || !connection.setCharacteristicNotification(notifier, true)) {
                 finishSubscribe(false); return
@@ -51,35 +52,31 @@ class GattSessionLink(
     }
     private fun finishSubscribe(ok: Boolean) { val callback = subscription; subscription = null; callback?.invoke(ok) }
     fun descriptorWritten(descriptor: BluetoothGattDescriptor, ok: Boolean) {
-        if (!ended && owns() && descriptor.characteristic.uuid == notifier.uuid && descriptor.uuid == cccd) finishSubscribe(ok)
+        if (!ended && owns() && descriptor.characteristic.uuid == notifier?.uuid && descriptor.uuid == cccd) finishSubscribe(ok)
     }
     fun received(characteristic: BluetoothGattCharacteristic, bytes: ByteArray) {
-        if (!ended && owns() && characteristic.uuid == notifier.uuid) receive?.invoke(bytes)
+        if (!ended && owns() && characteristic.uuid == notifier?.uuid) receive?.invoke(bytes)
     }
     override fun write(bytes: ByteArray, complete: (Boolean) -> Unit) {
-        if (ended || written != null || !owns()) { complete(false); return }
-        written = complete
+        if (ended || receipt.pending || !owns()) { complete(false); return }
         try {
-            writer.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            val mode=if(writeMode==GattWriteMode.WITHOUT_RESPONSE)BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE else BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            writer.writeType = mode
             val ok = if (Build.VERSION.SDK_INT >= 33)
-                connection.writeCharacteristic(writer, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
+                connection.writeCharacteristic(writer, bytes, mode) == BluetoothStatusCodes.SUCCESS
             else { writer.value = bytes; connection.writeCharacteristic(writer) }
-            if (!ok) { finishWrite(false); return }
-            writeTimeout = clock.later(5000) { if (!ended && owns()) finishWrite(false) }
-        } catch (_: Exception) { finishWrite(false) }
+            if (!ok) { complete(false); return }
+            receipt.accept(writeMode,complete)
+        } catch (_: Exception) { complete(false) }
     }
     fun written(characteristic: BluetoothGattCharacteristic, ok: Boolean) {
-        if (!ended && owns() && characteristic.uuid == writer.uuid) finishWrite(ok)
-    }
-    private fun finishWrite(ok: Boolean) {
-        writeTimeout?.cancel(); writeTimeout = null
-        val callback = written; written = null; callback?.invoke(ok)
+        if (!ended && owns() && characteristic.uuid == writer.uuid) receipt.acknowledge(ok)
     }
     override fun close() {
         if (ended) return
-        ended = true; receive = null; subscription = null; written = null
-        writeTimeout?.cancel(); writeTimeout = null
-        try { connection.setCharacteristicNotification(notifier, false) } catch (_: Exception) {}
+        ended = true; receive = null; subscription = null
+        receipt.cancel()
+        try { notifier?.let{connection.setCharacteristicNotification(it, false)} } catch (_: Exception) {}
         try { connection.disconnect() } catch (_: Exception) {}
         try { connection.close() } catch (_: Exception) {}
     }

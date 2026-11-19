@@ -3,14 +3,18 @@ AFTERGLOW — Bluetooth RGB light controller
 Source and manual releases: https://github.com/Dynatomic/AfterGlow
 
 ANDROID DEVELOPMENT PREVIEW
-Release v1.0.3 also includes Afterglow-Android-v1.0.3.apk, a native Android
+Release v1.0.4 includes Afterglow-Android-v1.0.4.apk, a native Android
 8.0+ (API 26+) development build. Download the APK from the GitHub release page,
 transfer/open it on the phone and permit installation from that file source if
 Android asks. Install over an existing Afterglow preview without uninstalling
 to retain local saved devices; this provided APK uses the same debug signer.
 Other developers' independently signed builds cannot update that installation.
 
-The APK is version 1.0.0-android-preview.11 (code 11), debug-signed rather than
+Download the current APK directly:
+https://github.com/Dynatomic/AfterGlow/releases/download/v1.0.4/Afterglow-Android-v1.0.4.apk
+Release notes and checksums: https://github.com/Dynatomic/AfterGlow/releases/latest
+
+The APK is version 1.0.4 (code 13), debug-signed rather than
 production-signed. Android has no Internet permission or update checker: updates
 are manual APK downloads/installation. No vendor app, PC server or background
 Bluetooth service is required. See android/README.txt for controls and build
@@ -22,8 +26,11 @@ controlled the known light. This is overall acceptance of that device/session,
 not certification of every effect, profile, firmware variant or range-recovery
 condition. P001 reference evidence is described separately in ARCHITECTURE.txt;
 the other four catalog signatures remain documented, not hardware verified.
-The published APK is the exact user-tested preview11 build; source organization
-and web version/documentation changes do not rebuild or modify its bytes.
+That acceptance applies to the earlier preview11 build. Version 1.0.4 adds
+separate native ELK-BLEDOB/BLEDOM drivers, automatic validated-channel matching
+and compact version text while preserving the native interface. It passed local
+JVM/build/signature checks; this new APK and ELK controls still need phone testing.
+The earlier preview11/v1.0.3 release remains available unchanged.
 
 BROWSER APP
 The self-contained dist/index.html is the HTTPS hosting source. There is currently
@@ -37,9 +44,9 @@ cloud control service, telemetry, computer microphone or system-audio capture is
 used. The optional manual update check contacts GitHub for public release metadata. Device/profile settings stay in this browser's local storage.
 
 VERSION AND MANUAL UPDATES
-Copies 1.0.2 and earlier use the previous repository address. Download 1.0.3
+Copies 1.0.2 and earlier use the previous repository address. Download the current release
 manually once from the AfterGlow release page; this copy uses the new address.
-This copy is version 1.0.3. Check for updates in the top bar makes one anonymous
+This copy is version 1.0.4. Check for updates in the top bar makes one anonymous
 request to the public GitHub latest-release API only when clicked. Results and
 the manual release link appear in Advanced setup, which opens for the check. There is no
 startup check, authorization token, automatic download, executable update or
@@ -98,12 +105,11 @@ profile and origin; changing to a new HTTPS origin needs a new first permission.
 
 Live refresh testing reported that saved-device lookup was unsupported in that
 browser context. Automatic reconnect is not live-verified. Serving on localhost
-or HTTPS does not guarantee that getDevices is available. Use Connect or Advanced
-setup > Choose a light when lookup/grant/reachability is unavailable.
+or HTTPS does not guarantee that getDevices is available. Use Connect when lookup/grant/reachability is unavailable. Saved-device selection
+can also guide you through the chooser when this API is unavailable.
 
 Advanced setup shows page/API support, profile, light name, link/auth status and
-last issue. Identify only reads a picker name without connecting or writing;
-a name does not establish brand or protocol compatibility. Expert settings keeps
+last issue. Names alone do not establish protocol compatibility. Expert settings keeps
 custom verified UUID/packet profiles and import/export. No guessed protocol
 probing is performed. Copy troubleshooting report provides local selectable-text
 fallback and redacts known device IDs/token fields; Clear log does not disconnect.
@@ -167,3 +173,59 @@ INTERNAL ARCHITECTURE
 See ARCHITECTURE.txt for catalog, driver, transport, capability and private saved-
 device boundaries and migration rules. Version 1.0.3 includes these internal
 boundaries while preserving the approved interface and existing controls.
+
+Windows ELK Bluetooth strips
+The Windows browser controller has distinct ELK-BLEDOB and ELK-BLEDOM profiles.
+Connect can recognize either documented model; Advanced setup also allows an
+explicit profile. Padded advertised names are accepted, while the full trimmed
+model and its expected Bluetooth channel must match. Unknown ELK-BLED variants
+are not assigned guessed commands. The browser chooser shows nearby BLE candidates;
+channel validation still happens after selection.
+Power, RGB, brightness, Jump/Fade/Strobe, Speed and Full color wheel are available.
+Music is unavailable for these profiles. Connecting or reconnecting sends no
+lighting settings and does not set the strip clock. Firmware variants need a live
+check. The native Android 1.0.4 APK now includes these separate ELK drivers too; it
+preserves Device Option and uses native Android BLE permissions and connections.
+
+Nearby Bluetooth device support labels (Windows)
+Connect shows the browser's broad nearby BLE chooser.
+Chrome owns that popup, so Afterglow cannot add support labels inside it. After
+selection, Afterglow shows the selected device name and its support status below
+the header. Support remains unverified until the expected channels are checked. Unsupported selections stay visible,
+send no light commands and do not replace your last ready saved light. Supported built-in models
+are matched automatically when you select a different light.
+
+Automatic built-in profile matching (Windows)
+Changing lights automatically matches DayBetter QC, ELK-BLEDOB or ELK-BLEDOM,
+regardless of the previously selected built-in profile. The matched profile and
+saved device update only after its exact channels are checked and ready (QC also
+authenticates). Failed/cancelled selections preserve the last successful record.
+Saved reconnect uses the exact recorded device and driver/channel; it does not
+silently assign another driver if the device changes. No lighting settings replay.
+Custom verified profiles remain an intentional advanced override and are not
+replaced automatically from a device name.
+
+Windows device management
+Connect opens the nearby Bluetooth chooser. Save device adds the current supported
+ready light to a local list (up to 32); successful connections still maintain the
+separate last-ready reconnect record. Use Saved devices to reconnect an exact
+saved controller. Within the current page, previously ready device handles are reused without
+opening another chooser. After reload, if Chrome lacks saved-device lookup, select
+that same controller in the chooser; a different Chrome device ID is rejected.
+Rename changes only the local label, not the Bluetooth name or driver matching.
+Forget removes the selected target and disconnects it if active, cancelling queued
+commands and stale reconnects. Forgetting an inactive target leaves another active
+light connected. Disconnect keeps the list and leaves the light's setting alone.
+The displayed Target identifies which device Rename/Forget will manage.
+Advanced setup is on the same toolbar row as Saved devices. It opens a modal popup
+with Close and Escape support. Update results and the release link are at its bottom.
+Choose a light and Identify only controls and their obsolete helper text were removed.
+
+Same-page saved-device switching
+After a controller becomes ready, its BluetoothDevice handle is retained only in
+this page's memory, keyed by its exact browser ID. Selecting saved devices reuses
+those handles before attempting saved-device lookup or showing a chooser. Every
+reconnection still validates its channels/driver (and authenticates QC), with no
+lighting replay. Failed cached reconnects discard the handle; Forget and Quit also
+remove it. Reloading or closing the page clears these handles, so this does not
+change Chrome's saved-device lookup limitation or enable background reconnect.

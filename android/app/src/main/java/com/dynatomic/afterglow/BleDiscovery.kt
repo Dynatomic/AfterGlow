@@ -29,7 +29,8 @@ class AndroidBleDiscovery(private val adapter: BluetoothAdapter?, private val ui
                 if (token != generation || callback !== this) return@post
                 try {
                     val device = result.device
-                    found(LightDevice(device.address, device.name?.takeIf { it.isNotBlank() } ?: "Unnamed Bluetooth device"))
+                    found(LightDevice(device.address, result.scanRecord?.deviceName?.takeIf { it.isNotBlank() }
+                        ?: device.name?.takeIf { it.isNotBlank() } ?: "Unnamed Bluetooth device"))
                 } catch (_: SecurityException) { failure("Bluetooth permission was removed. Allow Nearby devices and retry.") }
             } }
             override fun onScanFailed(code: Int) { ui.post {

@@ -50,6 +50,7 @@ class LightController(context:Context,private val listener:Listener) {
     private var connectingIdentity:LightDevice?=null
     private var selectedForAttempt:BluetoothDevice?=null
     private var selectedName=""
+    private var expectedDescriptorForAttempt:DeviceDescriptorRef?=null
     private var selectedIdentityForAttempt:LightDevice?=null
     private var automaticGatt=false
     private val rangeReconnect=ForegroundReconnect()
@@ -76,7 +77,7 @@ class LightController(context:Context,private val listener:Listener) {
             try{rememberAttempt?.let{memory.authenticated(it)}}catch(_:Exception){saveFailed=true}
         }
         else attemptStage=text
-        listener.onStatus(if(ready)"Authenticated · ${matchedModel?.id ?: "light"}" else text,ready,!ready&&text.startsWith("Authenticating"))
+        listener.onStatus(if(ready)"$text · ${matchedModel?.id ?: "light"}" else text,ready,!ready&&text.startsWith("Authenticating"))
         if(saveFailed)listener.onError("Connected, but the last light could not be saved on this phone.")
     },{listener.onError(it)},authenticationTimeout={authenticationTimedOut(it)},failure={fail(it)},transportLost={postAuthTransportLost(it)})
     private fun connectPermission()=Build.VERSION.SDK_INT<31||app.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED
@@ -121,7 +122,7 @@ class LightController(context:Context,private val listener:Listener) {
     fun isSelectedDevice(id:String):Boolean=LightMemory.validated(LightDevice(id,""))?.id?.let{it==selectedIdentityForAttempt?.id}==true
     fun hasPendingConnection()=connectionAttempt.active||rangeReconnect.phase==ForegroundReconnect.Phase.WAITING
     fun currentDeviceName():String?=if(session.ready)connectingIdentity?.let{devices.find(it.id)?.alias ?: it.name} else null
-    /** A live capability source is published only after exact channel match and authentication. */
+    /** A live capability source is published only after exact channel match and driver-required setup. */
     fun currentDescriptor():DeviceModelDescriptor?=matchedModel.takeIf{session.ready}
     fun currentCapabilities():DeviceCapabilities?=currentDescriptor()?.capabilities
     fun saveDevice(light:LightDevice):Boolean=editDevices {
@@ -142,13 +143,17 @@ class LightController(context:Context,private val listener:Listener) {
         if(isConnectedDevice(saved.id))return
         if(!connectPermission()){listener.onError("Allow Nearby devices access to connect.");return}
         if(adapter==null||!adapter.isEnabled){listener.onError("Turn on Bluetooth, then connect the saved light.");return}
-        try{connectSelected(adapter.getRemoteDevice(saved.id),saved.advertisedName)}
+        try{
+            val native=adapter.getRemoteDevice(saved.id)
+            connectSelected(native,native.name?.takeIf{it.isNotBlank()} ?: saved.advertisedName)
+        }
         catch(_:Exception){listener.onError("Could not open the saved light. Use Device Option to scan again.")}
     }
     private fun connectSelected(selected:BluetoothDevice,name:String){
         if(!connectPermission()){listener.onError("Allow Nearby devices access to connect.");return}
         val identity=LightMemory.validated(LightDevice(selected.address,name)) ?: run{listener.onError("Choose a valid device from Device Option.");return}
         disconnect();connectionAttempt.begin();selectedForAttempt=selected;selectedName=name;selectedIdentityForAttempt=identity
+        expectedDescriptorForAttempt=devices.find(identity.id)?.descriptor
         openSelected(selected,name)
     }
     private fun openSelected(selected:BluetoothDevice,name:String){
@@ -235,16 +240,23 @@ class LightController(context:Context,private val listener:Listener) {
             val match=DeviceCatalog.models.firstOrNull{model->
                 val signature=model.signature
                 val service=candidate.getService(UUID.fromString(signature.service))
-                val w=service?.getCharacteristic(UUID.fromString(signature.write));val n=service?.getCharacteristic(UUID.fromString(signature.notify))
-                w!=null&&n!=null&&w.properties and BluetoothGattCharacteristic.PROPERTY_WRITE!=0&&n.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY!=0
+                val w=service?.getCharacteristic(UUID.fromString(signature.write))
+                val n=signature.notify?.let{service?.getCharacteristic(UUID.fromString(it))}
+                DeviceCatalog.matchesName(model,selectedName)&&DeviceCatalog.acceptsSaved(model,expectedDescriptorForAttempt)&&
+                    w!=null&&DeviceCatalog.writeMode(model,w.properties and BluetoothGattCharacteristic.PROPERTY_WRITE!=0,
+                        w.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE!=0)!=null&&
+                    (signature.notify==null || (n!=null&&n.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY!=0))
             }
-            if(match==null){fail("This light has no supported DayBetter QC channel. A device name does not prove compatibility.");return@post}
+            if(match==null){fail("Not yet supported: this device has no matching supported name and channel, or its saved driver identity changed. No lighting commands were sent.");return@post}
             val driver=DriverRegistry.resolve(match.driverId)
             if(driver==null||!TransportRegistry.supports(match.transport)){fail("This device driver is unavailable.");return@post}
             matchedModel=match
             val service=candidate.getService(UUID.fromString(match.signature.service))
-            val next=GattSessionLink(candidate,service.getCharacteristic(UUID.fromString(match.signature.write)),
-                service.getCharacteristic(UUID.fromString(match.signature.notify)),clock){current(candidate,token)}
+            val writer=service.getCharacteristic(UUID.fromString(match.signature.write))
+            val mode=DeviceCatalog.writeMode(match,writer.properties and BluetoothGattCharacteristic.PROPERTY_WRITE!=0,
+                writer.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE!=0)!!
+            val next=GattSessionLink(candidate,writer,
+                match.signature.notify?.let{service.getCharacteristic(UUID.fromString(it))},clock,mode){current(candidate,token)}
             port=next;session.attach(next,driver)
         }}
         override fun onDescriptorWrite(candidate:BluetoothGatt,descriptor:BluetoothGattDescriptor,status:Int){ui.post{if(current(candidate,token))port?.descriptorWritten(descriptor,status==BluetoothGatt.GATT_SUCCESS)}}
@@ -267,7 +279,7 @@ class LightController(context:Context,private val listener:Listener) {
     }
     fun disconnect(){
         rangeReconnect.stop()
-        connectionAttempt.cancel();selectedForAttempt=null;selectedName=""
+        connectionAttempt.cancel();selectedForAttempt=null;selectedName="";expectedDescriptorForAttempt=null
         selectedIdentityForAttempt=null
         clearTransport()
         listener.onStatus("Disconnected",false,false)

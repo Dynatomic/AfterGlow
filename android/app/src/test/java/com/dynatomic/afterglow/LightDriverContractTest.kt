@@ -54,7 +54,7 @@ class LightDriverContractTest {
 
     @Test fun qcDriverOwnsChallengeExchangeAndRequiresMatchingAcceptedConfirmation() {
         val driver: LightDriver = DaybetterQcDriver
-        val initial = driver.beginAuthentication()
+        val initial = driver.beginAuthentication()!!
         assertEquals(0, initial.command)
         assertEquals("a000084343484950acca", initial.bytes.hex())
         val challenge = driver.response(responseFrame(0, 67, 67, 72, 73, 80, 0x12, 0x34))
